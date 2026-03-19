@@ -537,7 +537,7 @@ async function _loadAndRender(user){
   // Try Supabase
   let loaded=false;
   try{
-    const {data,error}=await _sb.from('user_state').select('data').eq('user_id',user.id).single();
+    const {data,error}=await _sb.from('user_state').select('data').eq('user_id',user.id).maybeSingle();
     if(!error&&data?.data){S=data.data;loaded=true;}
   }catch(e){console.warn('Supabase load failed, using local',e);}
   // Fallback: localStorage
@@ -587,21 +587,20 @@ async function doLogin(){
   const setErr=(m)=>{err.textContent=m;btn.textContent='Entrar';btn.disabled=false;}
   if(!email||!pw){setErr('Preencha e-mail e senha.');return;}
   btn.textContent='Entrando…';btn.disabled=true;err.textContent='';
-  // Step 1: check if Supabase client loaded
-  setLog('1/4 Verificando conexão…');
-  if(!window.supabase||!_sb){setErr('Erro: Supabase não carregou. Verifique sua conexão com a internet.');return;}
-  // Step 2: sign in
-  setLog('2/4 Autenticando…');
+  if(!window.supabase||!_sb){setErr('Erro: Supabase não carregou.');return;}
+  // Wake up Supabase free tier
+  setLog('Conectando ao servidor…');
+  try{await fetch(SB_URL+'/rest/v1/',{headers:{'apikey':SB_KEY}});}catch(e){}
+  setLog('Autenticando…');
   let loginResult;
   try{
     const p=_sb.auth.signInWithPassword({email,password:pw});
-    const t=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Servidor demorou demais (>15s). Tente novamente.')),15000));
+    const t=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Tempo esgotado. Tente novamente em 10 segundos.')),30000));
     loginResult=await Promise.race([p,t]);
   }catch(e){setErr(e.message);return;}
   if(loginResult.error){setErr(loginResult.error.message==='Invalid login credentials'?'E-mail ou senha incorretos.':loginResult.error.message);return;}
-  // Step 3: load state
-  setLog('3/4 Carregando seus dados…');
-  try{await initApp();}catch(e){setErr('Erro ao carregar: '+e.message);console.error(e);}
+  setLog('Carregando dados…');
+  try{await _loadAndRender(loginResult.data.user);}catch(e){setErr('Erro ao carregar: '+e.message);console.error(e);}
 }
 
 async function doRegister(){
