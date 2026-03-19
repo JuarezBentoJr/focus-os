@@ -529,33 +529,42 @@ const _S_DEFAULTS={v:4,tasks:[],studyLogs:[],gym:{start:D(),days:{}},projects:[
 ]};
 
 // ── Async init — Supabase auth → load state → render ───────────────
-async function initApp(){
+async function _loadAndRender(user){
   const log=document.getElementById('li_log');
   const setLog=(m)=>{if(log)log.textContent=m;console.log('[FocusOS]',m);}
-  // 1. Check auth session
-  setLog('3/4 Verificando sessão…');
-  let _gsResult;
-  try{_gsResult=await _sb.auth.getSession();}catch(e){_showLoginScreen();throw e;}
-  const {data:{session}}=_gsResult;
-  if(!session){_showLoginScreen();return;}
-  _setUserUI(session.user);
-  // 2. Try Supabase first
+  _setUserUI(user);
+  setLog('Carregando dados…');
+  // Try Supabase
   let loaded=false;
   try{
-    const {data,error}=await _sb.from('user_state').select('data').eq('user_id',session.user.id).single();
+    const {data,error}=await _sb.from('user_state').select('data').eq('user_id',user.id).single();
     if(!error&&data?.data){S=data.data;loaded=true;}
   }catch(e){console.warn('Supabase load failed, using local',e);}
-  // 3. Fallback: localStorage (migration path)
+  // Fallback: localStorage
   if(!loaded){
     try{const loc=localStorage.getItem(LK);if(loc){S=JSON.parse(loc);await _syncToSupabase();}}catch(e){}
   }
-  // 4. Ensure defaults
   if(!S||!S.v){S=JSON.parse(JSON.stringify(_S_DEFAULTS));}
   _runMigrations();
-  setLog('4/4 Renderizando…');
+  if(log)log.textContent='';
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appWrap').style.display='flex';
   R();
+}
+
+async function initApp(){
+  // Listen to auth state — handles both fresh login and page reload with existing session
+  _sb.auth.onAuthStateChange(async(event,session)=>{
+    console.log('[FocusOS] auth event:',event);
+    if(session&&session.user){
+      await _loadAndRender(session.user);
+    } else {
+      _showLoginScreen();
+    }
+  });
+  // Also check immediately in case onAuthStateChange fires before we set up listener
+  const {data:{session}}=await _sb.auth.getSession();
+  if(!session){_showLoginScreen();}
 }
 
 function _setUserUI(user){
@@ -666,6 +675,7 @@ const MOD_DEF={
   config:{lbl:'Configurações',icon:'config',core:true,cat:'Sistema'}
 };
 function _runMigrations(){
+  if(!S||!S.v)return;
 if(!S.modules)S.modules={painel:true,inbox:true,taskboard:true,habboard:true,finboard:true,cpm:true,gym:true,study:true,dash:true,medit:true,perfil:true,config:true};
 // Migrate: ensure all registered modules have a key (for existing users)
 Object.keys(MOD_DEF).forEach(k=>{if(S.modules[k]===undefined)S.modules[k]=true});
@@ -684,7 +694,7 @@ if(S.config.focusVol===undefined)S.config.focusVol=0.5;
 if(S.config.focusMute===undefined)S.config.focusMute=false;
 if(!S.config.focusType)S.config.focusType='isochronic';
 }
-_runMigrations(); // run once at boot for localStorage users
+// _runMigrations called after S is loaded in _loadAndRender
 
 // GAMIFICATION ENGINE
 if(!S.xp)S.xp={total:0,streaks:{},achievements:[]};
@@ -777,7 +787,7 @@ function habitMigrate(h){if(!h.days)h.days=[0,1,2,3,4,5,6];if(!h.status)h.status
 // ==================================================================
 // NAV
 // ==================================================================
-let V='painel',panelDate=D();
+var V='painel',panelDate=D();
 function go(el){document.querySelectorAll('.si').forEach(x=>x.classList.remove('on'));el.classList.add('on');V=el.dataset.v;document.getElementById('vT').textContent=MOD_DEF[V]?.lbl||'';buildNav();R()}
 
 function R(){syncStudyToProject();
