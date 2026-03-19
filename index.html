@@ -695,11 +695,24 @@ if(!S.config.finCategories)S.config.finCategories=[];
 if(S.config.focusVol===undefined)S.config.focusVol=0.5;
 if(S.config.focusMute===undefined)S.config.focusMute=false;
 if(!S.config.focusType)S.config.focusType='isochronic';
+// Init exercise DB
+if(!S.exDB||!S.exDB.length)S.exDB=JSON.parse(JSON.stringify(EXDB_DEFAULT));
+// Init gym mesocycles
+if(S.gym&&(!S.gym.mesocycles||!S.gym.mesocycles.length)){
+  S.gym.mesocycles=[{id:'ms1',name:'Mesociclo 1',start:S.gym.start||D(),durDays:21,
+    rotation:['A','B','C'],
+    mods:{
+      A:{name:'PUSH — Peito · Ombro · Tríceps',exercises:['ex01','ex03','ex02','ex05']},
+      B:{name:'PULL — Costas · Bíceps',exercises:['ex08','ex09','ex11','ex12']},
+      C:{name:'LEGS — Pernas · Core',exercises:['ex15','ex17','ex18','ex22']}
+    }}];
+  S.gym.activeMeso='ms1';
+}
 }
 // _runMigrations called after S is loaded in _loadAndRender
 
 // GAMIFICATION ENGINE
-if(!S.xp)S.xp={total:0,streaks:{},achievements:[]};
+// (S fields initialized safely in _loadAndRender)
 
 // UNDO STACK (in-memory only, max 30 snapshots)
 const _undoStack=[];const _redoStack=[];const UNDO_MAX=30;let _undoLock=false;
@@ -718,21 +731,11 @@ const _svRaw=()=>{
 const sv=()=>{undoPush();_svRaw();};
 
 
-// Initialize exercise DB
-if(!S.exDB||!S.exDB.length)S.exDB=JSON.parse(JSON.stringify(EXDB_DEFAULT));
+// (exDB initialized in _runMigrations)
 // MOD color map
 var MOD_COLORS={A:{c:'var(--rd)',bg:'var(--rdd)'},B:{c:'var(--bl)',bg:'var(--bld)'},C:{c:'var(--gn)',bg:'var(--gnd)'},D:{c:'var(--or)',bg:'var(--ord)'},E:{c:'var(--pu)',bg:'var(--pud)'}};
-// Initialize mesocycles
-if(!S.gym.mesocycles||!S.gym.mesocycles.length){
-  S.gym.mesocycles=[{id:'ms1',name:'Mesociclo 1',start:S.gym.start||D(),durDays:21,
-    rotation:['A','B','C'],
-    mods:{
-      A:{name:'PUSH — Peito · Ombro · Tríceps',exercises:['ex01','ex03','ex02','ex05']},
-      B:{name:'PULL — Costas · Bíceps',exercises:['ex08','ex09','ex11','ex12']},
-      C:{name:'LEGS — Pernas · Core',exercises:['ex15','ex17','ex18','ex22']}
-    }}];
-  S.gym.activeMeso='ms1';
-}
+// (gym mesocycles initialized in _runMigrations)
+
 function getMeso(){return S.gym.mesocycles.find(m=>m.id===(S.gym.activeMeso||'ms1'))||S.gym.mesocycles[0]}
 function getWP(){const ms=getMeso();if(!ms)return{};const wp={};Object.entries(ms.mods).forEach(([ltr,mod])=>{const col=MOD_COLORS[ltr]||MOD_COLORS.A;wp[ltr]={n:mod.name,c:col.c,bg:col.bg,ex:(mod.exercises||[]).map(eid=>getExName(eid))}});return wp}
 function getROT(){const ms=getMeso();return ms?ms.rotation:['A','B','C']}
@@ -3946,7 +3949,7 @@ updateGreeting();
 if('Notification'in window&&Notification.permission==='default')Notification.requestPermission();
 R();
 // Show onboarding if first run
-if(!S.onboarded)setTimeout(showOnboarding,300);
+if(S&&!S.onboarded)setTimeout(showOnboarding,300);
 </script>
 
 <!-- MODAL: Value Task (Hábito / Financeiro) -->
