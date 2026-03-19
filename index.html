@@ -529,18 +529,20 @@ const _S_DEFAULTS={v:4,tasks:[],studyLogs:[],gym:{start:D(),days:{}},projects:[
 ]};
 
 // ── Async init — Supabase auth → load state → render ───────────────
+var _appLoaded=false;
+
 async function _loadAndRender(user){
+  if(_appLoaded)return; // prevent double-call
+  _appLoaded=true;
   const log=document.getElementById('li_log');
   const setLog=(m)=>{if(log)log.textContent=m;console.log('[FocusOS]',m);}
   _setUserUI(user);
   setLog('Carregando dados…');
-  // Try Supabase
   let loaded=false;
   try{
     const {data,error}=await _sb.from('user_state').select('data').eq('user_id',user.id).maybeSingle();
     if(!error&&data?.data){S=data.data;loaded=true;}
   }catch(e){console.warn('Supabase load failed, using local',e);}
-  // Fallback: localStorage
   if(!loaded){
     try{const loc=localStorage.getItem(LK);if(loc){S=JSON.parse(loc);await _syncToSupabase();}}catch(e){}
   }
@@ -553,16 +555,15 @@ async function _loadAndRender(user){
 }
 
 async function initApp(){
-  // Listen to auth state — handles both fresh login and page reload with existing session
   _sb.auth.onAuthStateChange(async(event,session)=>{
     console.log('[FocusOS] auth event:',event);
-    if(session&&session.user){
+    if((event==='SIGNED_IN'||event==='INITIAL_SESSION')&&session?.user){
       await _loadAndRender(session.user);
-    } else {
+    } else if(event==='SIGNED_OUT'){
+      _appLoaded=false;
       _showLoginScreen();
     }
   });
-  // Also check immediately in case onAuthStateChange fires before we set up listener
   const {data:{session}}=await _sb.auth.getSession();
   if(!session){_showLoginScreen();}
 }
@@ -588,19 +589,11 @@ async function doLogin(){
   if(!email||!pw){setErr('Preencha e-mail e senha.');return;}
   btn.textContent='Entrando…';btn.disabled=true;err.textContent='';
   if(!window.supabase||!_sb){setErr('Erro: Supabase não carregou.');return;}
-  // Wake up Supabase free tier
-  setLog('Conectando ao servidor…');
-  try{await fetch(SB_URL+'/rest/v1/',{headers:{'apikey':SB_KEY}});}catch(e){}
   setLog('Autenticando…');
-  let loginResult;
-  try{
-    const p=_sb.auth.signInWithPassword({email,password:pw});
-    const t=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Tempo esgotado. Tente novamente em 10 segundos.')),30000));
-    loginResult=await Promise.race([p,t]);
-  }catch(e){setErr(e.message);return;}
-  if(loginResult.error){setErr(loginResult.error.message==='Invalid login credentials'?'E-mail ou senha incorretos.':loginResult.error.message);return;}
-  setLog('Carregando dados…');
-  try{await _loadAndRender(loginResult.data.user);}catch(e){setErr('Erro ao carregar: '+e.message);console.error(e);}
+  const {data,error}=await _sb.auth.signInWithPassword({email,password:pw});
+  if(error){setErr(error.message==='Invalid login credentials'?'E-mail ou senha incorretos.':error.message);return;}
+  // onAuthStateChange will fire SIGNED_IN and call _loadAndRender
+  setLog('Carregando…');
 }
 
 async function doRegister(){
