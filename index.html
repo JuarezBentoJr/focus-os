@@ -517,7 +517,7 @@ const esc=s=>(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 // Sync: supabase.from('state').upsert({user_id, data: S})
 // Future: normalize into tables (tasks, checks, projects, modules)
 // ==================================================================
-let S;
+let S; // initialized after _S_DEFAULTS is defined below
 const _S_DEFAULTS={v:4,tasks:[],studyLogs:[],gym:{start:D(),days:{}},projects:[
 {id:'p1',name:'Plugin PCM',start:'2025-01-06',tasks:[{n:'Planning v1.7+',dur:30,dep:[],pct:95},{n:'Tracking',dur:20,dep:[{i:0,t:'FS',l:0}],pct:10},{n:'Relatório Final',dur:15,dep:[{i:1,t:'FS',l:0}],pct:0},{n:'Export PDF',dur:10,dep:[{i:2,t:'FS',l:0}],pct:0},{n:'Import fotos',dur:7,dep:[{i:1,t:'SS',l:5}],pct:0}]},
 {id:'p2',name:'Concurso Petrobras 2026',start:'2026-03-07',studyLink:true,tasks:[{n:'F1 NOCAUTE',dur:28,dep:[],pct:0},{n:'F2 CONSOLIDAÇÃO',dur:28,dep:[{i:0,t:'FS',l:0}],pct:0},{n:'F3 DIFERENCIAL',dur:21,dep:[{i:1,t:'FS',l:0}],pct:0},{n:'F4 REVISÃO',dur:7,dep:[{i:2,t:'FS',l:0}],pct:0}]}
@@ -527,6 +527,11 @@ const _S_DEFAULTS={v:4,tasks:[],studyLogs:[],gym:{start:D(),days:{}},projects:[
 {id:'h_water',n:'Água',unit:'L',target:2.5,icon:'💧',days:[0,1,2,3,4,5,6],status:'active',startDate:D()},
 {id:'h_sleep',n:'Sono',unit:'h',target:7,icon:'😴',days:[0,1,2,3,4,5,6],status:'active',startDate:D()}
 ]};
+
+// Initialize S synchronously so boot-time code never sees undefined
+try{S=JSON.parse(localStorage.getItem(LK));}catch(e){}
+if(!S||!S.v)S=JSON.parse(JSON.stringify(_S_DEFAULTS));
+
 
 // ── Async init — Supabase auth → load state → render ───────────────
 var _appLoaded=false;
@@ -541,12 +546,12 @@ async function _loadAndRender(user){
   let loaded=false;
   try{
     const {data,error}=await _sb.from('user_state').select('data').eq('user_id',user.id).maybeSingle();
-    if(!error&&data?.data){S=data.data;loaded=true;}
+    if(!error&&data?.data){S=data.data;loaded=true;console.log('[FocusOS] Loaded from Supabase');}
   }catch(e){console.warn('Supabase load failed, using local',e);}
   if(!loaded){
-    try{const loc=localStorage.getItem(LK);if(loc){S=JSON.parse(loc);await _syncToSupabase();}}catch(e){}
+    try{const loc=localStorage.getItem(LK);if(loc&&JSON.parse(loc)?.v){S=JSON.parse(loc);console.log('[FocusOS] Loaded from localStorage');await _syncToSupabase();}}catch(e){}
   }
-  if(!S||!S.v){S=JSON.parse(JSON.stringify(_S_DEFAULTS));}
+  if(!S||!S.v)S=JSON.parse(JSON.stringify(_S_DEFAULTS));
   // Safety guards — ensure all required keys exist after any load path
   if(!S.xp)S.xp={total:0,streaks:{},achievements:[]};
   if(!S.config)S.config={};
