@@ -547,7 +547,6 @@ async function _loadAndRender(user){
     try{const loc=localStorage.getItem(LK);if(loc){S=JSON.parse(loc);await _syncToSupabase();}}catch(e){}
   }
   if(!S||!S.v){S=JSON.parse(JSON.stringify(_S_DEFAULTS));}
-  _runMigrations();
   // Safety guards — ensure all required keys exist after any load path
   if(!S.xp)S.xp={total:0,streaks:{},achievements:[]};
   if(!S.config)S.config={};
@@ -558,6 +557,7 @@ async function _loadAndRender(user){
   if(!S.study)S.study={hpd:3,start:D(),done:{},z1:{}};
   if(!S.gym)S.gym={start:D(),days:{}};
   if(!S.projects)S.projects=[];
+  _runMigrations();
   if(log)log.textContent='';
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appWrap').style.display='flex';
